@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,10 +71,10 @@ const ManpowerDashboard = () => {
     if (data.rawData && data.rawData.length > 0) {
       const rawData = data.rawData;
       const newFilterOptions = {
-        executiveType: [...new Set(rawData.map((row: any) => row.ExecutiveType || row.executive_type || row['Executive Type']).filter(Boolean))],
-        ageGroup: [...new Set(rawData.map((row: any) => row.AgeGroup || row.age_group || row['Age Group']).filter(Boolean))],
-        gender: [...new Set(rawData.map((row: any) => row.Gender || row.gender).filter(Boolean))],
-        department: [...new Set(rawData.map((row: any) => row.Department || row.department).filter(Boolean))]
+        executiveType: [...new Set(rawData.map((row: any) => row.ExecutiveType || row.executive_type || row['Executive Type']).filter(Boolean))].map(String),
+        ageGroup: [...new Set(rawData.map((row: any) => row.AgeGroup || row.age_group || row['Age Group']).filter(Boolean))].map(String),
+        gender: [...new Set(rawData.map((row: any) => row.Gender || row.gender).filter(Boolean))].map(String),
+        department: [...new Set(rawData.map((row: any) => row.Department || row.department).filter(Boolean))].map(String)
       };
       setFilterOptions(newFilterOptions);
     }
