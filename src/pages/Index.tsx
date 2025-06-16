@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { MultiSelect } from '@/components/MultiSelect';
+import { FileUpload } from '@/components/FileUpload';
 import { useToast } from '@/components/ui/use-toast';
 
 ChartJS.register(
@@ -33,54 +33,116 @@ const ManpowerDashboard = () => {
     department: [] as string[]
   });
 
+  // State for uploaded data
+  const [uploadedData, setUploadedData] = useState<any>(null);
+  const [isDataUploaded, setIsDataUploaded] = useState(false);
+
   // Static data (will be dynamic later)
-  const metrics = {
+  const [metrics, setMetrics] = useState({
     totalEmployees: 736,
     executives: 225,
     departments: 5,
     avgAge: 32.5
-  };
+  });
 
-  const filterOptions = {
+  const [filterOptions, setFilterOptions] = useState({
     executiveType: ['Senior Executive', 'Mid-level Executive', 'Junior Executive', 'Team Lead'],
     ageGroup: ['20-25', '26-30', '31-35', '36-40', '41-45', '46+'],
     gender: ['Male', 'Female', 'Other'],
     department: ['IT', 'HR', 'Finance', 'Marketing', 'Operations']
+  });
+
+  // Handle uploaded data
+  const handleDataLoaded = (data: any) => {
+    console.log('Received data:', data);
+    setUploadedData(data);
+    setIsDataUploaded(true);
+    
+    // Update metrics with uploaded data
+    setMetrics({
+      totalEmployees: data.totalEmployees,
+      executives: data.executives,
+      departments: data.departments,
+      avgAge: Math.round(data.avgAge * 10) / 10
+    });
+
+    // Update filter options if available
+    if (data.rawData && data.rawData.length > 0) {
+      const rawData = data.rawData;
+      const newFilterOptions = {
+        executiveType: [...new Set(rawData.map((row: any) => row.ExecutiveType || row.executive_type || row['Executive Type']).filter(Boolean))],
+        ageGroup: [...new Set(rawData.map((row: any) => row.AgeGroup || row.age_group || row['Age Group']).filter(Boolean))],
+        gender: [...new Set(rawData.map((row: any) => row.Gender || row.gender).filter(Boolean))],
+        department: [...new Set(rawData.map((row: any) => row.Department || row.department).filter(Boolean))]
+      };
+      setFilterOptions(newFilterOptions);
+    }
+  };
+
+  // Chart data - updated to use uploaded data when available
+  const getDepartmentData = () => {
+    if (isDataUploaded && uploadedData?.departmentData) {
+      const labels = uploadedData.departmentData.map((item: any) => item.department);
+      const data = uploadedData.departmentData.map((item: any) => item.count);
+      const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
+      
+      return {
+        labels,
+        datasets: [{
+          label: 'Number of Employees',
+          data,
+          backgroundColor: colors.slice(0, labels.length),
+          borderColor: colors.slice(0, labels.length).map(color => color.replace('0.8', '1')),
+          borderWidth: 1
+        }]
+      };
+    }
+    
+    // Default static data
+    return {
+      labels: ['IT', 'HR', 'Finance', 'Marketing', 'Operations'],
+      datasets: [{
+        label: 'Number of Employees',
+        data: [185, 120, 95, 168, 168],
+        backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+        borderColor: ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed'],
+        borderWidth: 1
+      }]
+    };
+  };
+
+  const getGenderData = () => {
+    if (isDataUploaded && uploadedData?.genderData) {
+      const labels = uploadedData.genderData.map((item: any) => item.gender);
+      const data = uploadedData.genderData.map((item: any) => item.count);
+      const colors = ['#3b82f6', '#ec4899', '#6b7280', '#10b981', '#f59e0b'];
+      
+      return {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors.slice(0, labels.length),
+          borderColor: colors.slice(0, labels.length).map(color => color.replace('0.8', '1')),
+          borderWidth: 2
+        }]
+      };
+    }
+    
+    // Default static data
+    return {
+      labels: ['Male', 'Female', 'Other'],
+      datasets: [{
+        data: [420, 298, 18],
+        backgroundColor: ['#3b82f6', '#ec4899', '#6b7280'],
+        borderColor: ['#2563eb', '#db2777', '#4b5563'],
+        borderWidth: 2
+      }]
+    };
   };
 
   // Chart data
-  const departmentData = {
-    labels: ['IT', 'HR', 'Finance', 'Marketing', 'Operations'],
-    datasets: [{
-      label: 'Number of Employees',
-      data: [185, 120, 95, 168, 168],
-      backgroundColor: [
-        '#3b82f6',
-        '#10b981',
-        '#f59e0b',
-        '#ef4444',
-        '#8b5cf6'
-      ],
-      borderColor: [
-        '#2563eb',
-        '#059669',
-        '#d97706',
-        '#dc2626',
-        '#7c3aed'
-      ],
-      borderWidth: 1
-    }]
-  };
-
-  const genderData = {
-    labels: ['Male', 'Female', 'Other'],
-    datasets: [{
-      data: [420, 298, 18],
-      backgroundColor: ['#3b82f6', '#ec4899', '#6b7280'],
-      borderColor: ['#2563eb', '#db2777', '#4b5563'],
-      borderWidth: 2
-    }]
-  };
+  const departmentData = getDepartmentData();
+  const genderData = getGenderData();
 
   const ageGroupTrendsData = {
     labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
@@ -248,6 +310,25 @@ const ManpowerDashboard = () => {
             Export
           </Button>
         </div>
+
+        {/* File Upload Section */}
+        <FileUpload onDataLoaded={handleDataLoaded} />
+
+        {/* Data Source Indicator */}
+        {isDataUploaded && (
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+                  Data Source: Uploaded Excel File
+                </Badge>
+                <span className="text-sm text-green-700">
+                  Dashboard is now showing data from your uploaded file
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Key Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
