@@ -39,12 +39,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded }) => {
         console.log('Parsed Excel data:', jsonData);
         
         // Process the data to match our dashboard structure
-        const processedData = processExcelData(jsonData);
+        const processedData = processManpowerData(jsonData);
         onDataLoaded(processedData);
 
         toast({
           title: "File Uploaded Successfully",
-          description: `Loaded ${jsonData.length} rows of data from ${file.name}`,
+          description: `Loaded ${jsonData.length} rows of manpower data from ${file.name}`,
         });
       } catch (error) {
         console.error('Error parsing Excel file:', error);
@@ -58,35 +58,67 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded }) => {
     reader.readAsArrayBuffer(file);
   };
 
-  const processExcelData = (data: any[]) => {
-    // Process the raw Excel data to match dashboard structure
-    // This is a basic implementation - you can customize based on your Excel structure
-    const departments = [...new Set(data.map(row => row.Department || row.department))].filter(Boolean);
-    const genders = [...new Set(data.map(row => row.Gender || row.gender))].filter(Boolean);
-    const ageGroups = [...new Set(data.map(row => row.AgeGroup || row.age_group || row['Age Group']))].filter(Boolean);
-    const executiveTypes = [...new Set(data.map(row => row.ExecutiveType || row.executive_type || row['Executive Type']))].filter(Boolean);
+  const processManpowerData = (data: any[]) => {
+    // Process the manpower data based on your structure
+    const plants = [...new Set(data.map(row => row['Plant/Unit'] || row.Plant || row.Unit).filter(Boolean))];
+    const cadres = [...new Set(data.map(row => row.Cadre).filter(Boolean))];
+    const years = [...new Set(data.map(row => {
+      const dateStr = row['Year/Date'] || row.Year || row.Date;
+      if (dateStr) {
+        return new Date(dateStr).getFullYear().toString();
+      }
+      return null;
+    }).filter(Boolean))];
 
-    // Count employees by department
-    const departmentCounts = departments.map(dept => ({
-      department: dept,
-      count: data.filter(row => (row.Department || row.department) === dept).length
+    // Calculate totals
+    const totalManpower = data.reduce((sum, row) => sum + (Number(row['Manpower Count']) || 0), 0);
+    const totalExecutives = data.filter(row => row.Cadre === 'Executive').reduce((sum, row) => sum + (Number(row['Manpower Count']) || 0), 0);
+    const uniquePlants = plants.length;
+
+    // Calculate average age (weighted by manpower count)
+    const totalAgeWeight = data.reduce((sum, row) => {
+      const manpower = Number(row['Manpower Count']) || 0;
+      const avgAge = Number(row['Average Age']) || 0;
+      return sum + (manpower * avgAge);
+    }, 0);
+    const avgAge = totalManpower > 0 ? totalAgeWeight / totalManpower : 0;
+
+    // Department/Plant data for charts
+    const departmentData = plants.map(plant => ({
+      department: plant,
+      count: data.filter(row => (row['Plant/Unit'] || row.Plant || row.Unit) === plant)
+        .reduce((sum, row) => sum + (Number(row['Manpower Count']) || 0), 0)
     }));
 
-    // Count by gender
-    const genderCounts = genders.map(gender => ({
-      gender: gender,
-      count: data.filter(row => (row.Gender || row.gender) === gender).length
-    }));
+    // Gender data
+    const genderData = [
+      {
+        gender: 'Male',
+        count: data.reduce((sum, row) => sum + (Number(row['Male Manpower']) || 0), 0)
+      },
+      {
+        gender: 'Female',
+        count: data.reduce((sum, row) => sum + (Number(row['Female Manpower']) || 0), 0)
+      }
+    ];
+
+    // Age groups based on average age ranges
+    const ageGroups = ['35-40', '40-45', '45-50', '50+'];
+    const cadreTypes = ['Executive', 'Non-Executive'];
 
     return {
-      totalEmployees: data.length,
-      departments: departments.length,
-      executives: data.filter(row => 
-        (row.ExecutiveType || row.executive_type || row['Executive Type'])?.toLowerCase().includes('executive')
-      ).length,
-      avgAge: data.reduce((sum, row) => sum + (Number(row.Age || row.age) || 0), 0) / data.length,
-      departmentData: departmentCounts,
-      genderData: genderCounts,
+      totalEmployees: totalManpower,
+      departments: uniquePlants,
+      executives: totalExecutives,
+      avgAge: Math.round(avgAge * 10) / 10,
+      departmentData,
+      genderData,
+      filterOptions: {
+        executiveType: cadreTypes,
+        ageGroup: ageGroups,
+        gender: ['Male', 'Female'],
+        department: plants
+      },
       rawData: data
     };
   };
@@ -100,7 +132,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded }) => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FileSpreadsheet className="w-5 h-5" />
-          Upload Excel File
+          Upload Manpower Data (Excel)
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -117,8 +149,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded }) => {
             Choose Excel File
           </Button>
           <p className="text-sm text-muted-foreground text-center">
-            Upload an Excel file (.xlsx or .xls) containing employee data.<br />
-            Expected columns: Name, Department, Gender, Age, Executive Type
+            Upload an Excel file (.xlsx or .xls) containing manpower data.<br />
+            Expected columns: Plant/Unit, Year/Date, Cadre, Manpower Count, Male Manpower, Female Manpower, Average Age
           </p>
         </div>
       </CardContent>

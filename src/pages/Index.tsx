@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,15 +46,15 @@ const ManpowerDashboard = () => {
   });
 
   const [filterOptions, setFilterOptions] = useState({
-    executiveType: ['Senior Executive', 'Mid-level Executive', 'Junior Executive', 'Team Lead'],
-    ageGroup: ['20-25', '26-30', '31-35', '36-40', '41-45', '46+'],
-    gender: ['Male', 'Female', 'Other'],
-    department: ['IT', 'HR', 'Finance', 'Marketing', 'Operations']
+    executiveType: ['Executive', 'Non-Executive'],
+    ageGroup: ['35-40', '40-45', '45-50', '50+'],
+    gender: ['Male', 'Female'],
+    department: ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
   });
 
   // Handle uploaded data
   const handleDataLoaded = (data: any) => {
-    console.log('Received data:', data);
+    console.log('Received manpower data:', data);
     setUploadedData(data);
     setIsDataUploaded(true);
     
@@ -64,19 +63,12 @@ const ManpowerDashboard = () => {
       totalEmployees: data.totalEmployees,
       executives: data.executives,
       departments: data.departments,
-      avgAge: Math.round(data.avgAge * 10) / 10
+      avgAge: data.avgAge
     });
 
     // Update filter options if available
-    if (data.rawData && data.rawData.length > 0) {
-      const rawData = data.rawData;
-      const newFilterOptions = {
-        executiveType: [...new Set(rawData.map((row: any) => row.ExecutiveType || row.executive_type || row['Executive Type']).filter(Boolean))].map(String),
-        ageGroup: [...new Set(rawData.map((row: any) => row.AgeGroup || row.age_group || row['Age Group']).filter(Boolean))].map(String),
-        gender: [...new Set(rawData.map((row: any) => row.Gender || row.gender).filter(Boolean))].map(String),
-        department: [...new Set(rawData.map((row: any) => row.Department || row.department).filter(Boolean))].map(String)
-      };
-      setFilterOptions(newFilterOptions);
+    if (data.filterOptions) {
+      setFilterOptions(data.filterOptions);
     }
   };
 
@@ -85,12 +77,12 @@ const ManpowerDashboard = () => {
     if (isDataUploaded && uploadedData?.departmentData) {
       const labels = uploadedData.departmentData.map((item: any) => item.department);
       const data = uploadedData.departmentData.map((item: any) => item.count);
-      const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
+      const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899', '#14b8a6'];
       
       return {
         labels,
         datasets: [{
-          label: 'Number of Employees',
+          label: 'Total Manpower',
           data,
           backgroundColor: colors.slice(0, labels.length),
           borderColor: colors.slice(0, labels.length).map(color => color.replace('0.8', '1')),
@@ -116,7 +108,7 @@ const ManpowerDashboard = () => {
     if (isDataUploaded && uploadedData?.genderData) {
       const labels = uploadedData.genderData.map((item: any) => item.gender);
       const data = uploadedData.genderData.map((item: any) => item.count);
-      const colors = ['#3b82f6', '#ec4899', '#6b7280', '#10b981', '#f59e0b'];
+      const colors = ['#3b82f6', '#ec4899', '#6b7280'];
       
       return {
         labels,
@@ -321,10 +313,10 @@ const ManpowerDashboard = () => {
             <CardContent className="pt-6">
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
-                  Data Source: Uploaded Excel File
+                  Data Source: Uploaded Manpower Excel File
                 </Badge>
                 <span className="text-sm text-green-700">
-                  Dashboard is now showing data from your uploaded file
+                  Dashboard is now showing data from your uploaded manpower file
                 </span>
               </div>
             </CardContent>
@@ -335,11 +327,11 @@ const ManpowerDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
+              <CardTitle className="text-sm font-medium">Total Manpower</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{metrics.totalEmployees}</div>
+              <div className="text-2xl font-bold text-blue-600">{metrics.totalEmployees.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Active workforce
               </p>
@@ -352,22 +344,22 @@ const ManpowerDashboard = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{metrics.executives}</div>
+              <div className="text-2xl font-bold text-green-600">{metrics.executives.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground mt-1">
-                Leadership positions
+                Executive cadre
               </p>
             </CardContent>
           </Card>
           
           <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Departments</CardTitle>
+              <CardTitle className="text-sm font-medium">Plants/Units</CardTitle>
               <Building2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-purple-600">{metrics.departments}</div>
               <p className="text-xs text-muted-foreground mt-1">
-                Business units
+                Operating units
               </p>
             </CardContent>
           </Card>
@@ -397,12 +389,12 @@ const ManpowerDashboard = () => {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div>
-                <label className="text-sm font-medium mb-2 block">Executive Type</label>
+                <label className="text-sm font-medium mb-2 block">Cadre Type</label>
                 <MultiSelect
                   options={filterOptions.executiveType}
                   value={filters.executiveType}
                   onChange={(values) => handleFilterChange('executiveType', values)}
-                  placeholder="Select executive types"
+                  placeholder="Select cadre types"
                 />
               </div>
               
@@ -427,12 +419,12 @@ const ManpowerDashboard = () => {
               </div>
               
               <div>
-                <label className="text-sm font-medium mb-2 block">Department</label>
+                <label className="text-sm font-medium mb-2 block">Plant/Unit</label>
                 <MultiSelect
                   options={filterOptions.department}
                   value={filters.department}
                   onChange={(values) => handleFilterChange('department', values)}
-                  placeholder="Select departments"
+                  placeholder="Select plants/units"
                 />
               </div>
             </div>
@@ -446,10 +438,10 @@ const ManpowerDashboard = () => {
 
         {/* Charts */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* Employees by Department */}
+          {/* Manpower by Plant/Unit */}
           <Card>
             <CardHeader>
-              <CardTitle>Employees by Department</CardTitle>
+              <CardTitle>Manpower by Plant/Unit</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-80">
