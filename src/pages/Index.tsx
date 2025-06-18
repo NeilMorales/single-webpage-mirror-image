@@ -55,15 +55,20 @@ const ManpowerDashboard = () => {
   // Filter the raw data based on selected filters
   const filteredData = useMemo(() => {
     if (!isDataUploaded || !uploadedData?.rawData) {
+      console.log('No uploaded data available');
       return null;
     }
 
     const hasActiveFilters = Object.values(filters).some(arr => arr.length > 0);
     if (!hasActiveFilters) {
+      console.log('No active filters, returning all data');
       return uploadedData.rawData;
     }
 
-    return uploadedData.rawData.filter((row: any) => {
+    console.log('Applying filters:', filters);
+    console.log('Raw data sample:', uploadedData.rawData[0]);
+
+    const filtered = uploadedData.rawData.filter((row: any) => {
       // Filter by executive type (cadre)
       if (filters.executiveType.length > 0) {
         if (!filters.executiveType.includes(row.Cadre)) {
@@ -80,13 +85,19 @@ const ManpowerDashboard = () => {
 
       // Filter by gender - check if row has male or female manpower
       if (filters.gender.length > 0) {
-        const hasMale = (Number(row['Male Manpower']) || 0) > 0;
-        const hasFemale = (Number(row['Female Manpower']) || 0) > 0;
+        const maleManpower = Number(row['Male Manpower']) || 0;
+        const femaleManpower = Number(row['Female Manpower']) || 0;
         
-        const shouldIncludeMale = filters.gender.includes('Male') && hasMale;
-        const shouldIncludeFemale = filters.gender.includes('Female') && hasFemale;
+        let matchesGender = false;
         
-        if (!shouldIncludeMale && !shouldIncludeFemale) {
+        if (filters.gender.includes('Male') && maleManpower > 0) {
+          matchesGender = true;
+        }
+        if (filters.gender.includes('Female') && femaleManpower > 0) {
+          matchesGender = true;
+        }
+        
+        if (!matchesGender) {
           return false;
         }
       }
@@ -120,6 +131,10 @@ const ManpowerDashboard = () => {
 
       return true;
     });
+
+    console.log('Filtered data:', filtered);
+    console.log('Filtered data length:', filtered.length);
+    return filtered;
   }, [uploadedData, filters, isDataUploaded]);
 
   // Calculate metrics from filtered data
@@ -188,6 +203,8 @@ const ManpowerDashboard = () => {
       const data = Object.values(plantData) as number[];
       const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899', '#14b8a6'];
       
+      console.log('Department chart data:', { labels, data });
+      
       return {
         labels,
         datasets: [{
@@ -217,12 +234,42 @@ const ManpowerDashboard = () => {
     const dataToUse = filteredData || (isDataUploaded ? uploadedData?.rawData : null);
     
     if (isDataUploaded && dataToUse) {
-      const maleTotal = dataToUse.reduce((sum: number, row: any) => sum + (Number(row['Male Manpower']) || 0), 0);
-      const femaleTotal = dataToUse.reduce((sum: number, row: any) => sum + (Number(row['Female Manpower']) || 0), 0);
+      let maleTotal = 0;
+      let femaleTotal = 0;
       
-      const labels = ['Male', 'Female'];
-      const data = [maleTotal, femaleTotal];
-      const colors = ['#3b82f6', '#ec4899'];
+      // If gender filter is applied, only count the filtered gender data
+      if (filters.gender.length > 0) {
+        dataToUse.forEach((row: any) => {
+          if (filters.gender.includes('Male')) {
+            maleTotal += Number(row['Male Manpower']) || 0;
+          }
+          if (filters.gender.includes('Female')) {
+            femaleTotal += Number(row['Female Manpower']) || 0;
+          }
+        });
+      } else {
+        // No gender filter, show all
+        maleTotal = dataToUse.reduce((sum: number, row: any) => sum + (Number(row['Male Manpower']) || 0), 0);
+        femaleTotal = dataToUse.reduce((sum: number, row: any) => sum + (Number(row['Female Manpower']) || 0), 0);
+      }
+      
+      const labels = [];
+      const data = [];
+      const colors = [];
+      
+      if (maleTotal > 0) {
+        labels.push('Male');
+        data.push(maleTotal);
+        colors.push('#3b82f6');
+      }
+      
+      if (femaleTotal > 0) {
+        labels.push('Female');
+        data.push(femaleTotal);
+        colors.push('#ec4899');
+      }
+      
+      console.log('Gender chart data:', { labels, data });
       
       return {
         labels,
@@ -338,6 +385,7 @@ const ManpowerDashboard = () => {
   };
 
   const handleFilterChange = (filterType: keyof typeof filters, values: string[]) => {
+    console.log(`Filter ${filterType} changed to:`, values);
     setFilters(prev => ({
       ...prev,
       [filterType]: values
