@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -52,6 +52,102 @@ const ManpowerDashboard = () => {
     department: ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
   });
 
+  // Filter the raw data based on selected filters
+  const filteredData = useMemo(() => {
+    if (!isDataUploaded || !uploadedData?.rawData) {
+      return null;
+    }
+
+    const hasActiveFilters = Object.values(filters).some(arr => arr.length > 0);
+    if (!hasActiveFilters) {
+      return uploadedData.rawData;
+    }
+
+    return uploadedData.rawData.filter((row: any) => {
+      // Filter by executive type (cadre)
+      if (filters.executiveType.length > 0) {
+        if (!filters.executiveType.includes(row.Cadre)) {
+          return false;
+        }
+      }
+
+      // Filter by department (Plant/Unit)
+      if (filters.department.length > 0) {
+        if (!filters.department.includes(row['Plant/Unit'])) {
+          return false;
+        }
+      }
+
+      // Filter by gender - check if row has male or female manpower
+      if (filters.gender.length > 0) {
+        const hasMale = (Number(row['Male Manpower']) || 0) > 0;
+        const hasFemale = (Number(row['Female Manpower']) || 0) > 0;
+        
+        const shouldIncludeMale = filters.gender.includes('Male') && hasMale;
+        const shouldIncludeFemale = filters.gender.includes('Female') && hasFemale;
+        
+        if (!shouldIncludeMale && !shouldIncludeFemale) {
+          return false;
+        }
+      }
+
+      // Filter by age group based on average age
+      if (filters.ageGroup.length > 0) {
+        const avgAge = Number(row['Average Age']) || 0;
+        let matchesAgeGroup = false;
+        
+        filters.ageGroup.forEach(ageGroup => {
+          switch (ageGroup) {
+            case '35-40':
+              if (avgAge >= 35 && avgAge < 40) matchesAgeGroup = true;
+              break;
+            case '40-45':
+              if (avgAge >= 40 && avgAge < 45) matchesAgeGroup = true;
+              break;
+            case '45-50':
+              if (avgAge >= 45 && avgAge < 50) matchesAgeGroup = true;
+              break;
+            case '50+':
+              if (avgAge >= 50) matchesAgeGroup = true;
+              break;
+          }
+        });
+        
+        if (!matchesAgeGroup) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [uploadedData, filters, isDataUploaded]);
+
+  // Calculate metrics from filtered data
+  const filteredMetrics = useMemo(() => {
+    if (!filteredData || filteredData.length === 0) {
+      return metrics;
+    }
+
+    const totalManpower = filteredData.reduce((sum: number, row: any) => sum + (Number(row['Manpower Count']) || 0), 0);
+    const totalExecutives = filteredData.filter((row: any) => row.Cadre === 'Executive').reduce((sum: number, row: any) => sum + (Number(row['Manpower Count']) || 0), 0);
+    const uniquePlants = [...new Set(filteredData.map((row: any) => row['Plant/Unit']).filter(Boolean))].length;
+
+    // Calculate average age (weighted by manpower count)
+    const totalAgeWeight = filteredData.reduce((sum: number, row: any) => {
+      const manpower = Number(row['Manpower Count']) || 0;
+      const avgAge = Number(row['Average Age']) || 0;
+      return sum + (manpower * avgAge);
+    }, 0);
+    const avgAge = totalManpower > 0 ? totalAgeWeight / totalManpower : 0;
+
+    return {
+      totalEmployees: totalManpower,
+      executives: totalExecutives,
+      departments: uniquePlants,
+      avgAge: Math.round(avgAge * 10) / 10
+    };
+  }, [filteredData, metrics]);
+
   // Handle uploaded data
   const handleDataLoaded = (data: any) => {
     console.log('Received manpower data:', data);
@@ -72,11 +168,24 @@ const ManpowerDashboard = () => {
     }
   };
 
-  // Chart data - updated to use uploaded data when available
+  // Chart data - updated to use filtered data
   const getDepartmentData = () => {
-    if (isDataUploaded && uploadedData?.departmentData) {
-      const labels = uploadedData.departmentData.map((item: any) => item.department);
-      const data = uploadedData.departmentData.map((item: any) => item.count);
+    const dataToUse = filteredData || (isDataUploaded ? uploadedData?.rawData : null);
+    
+    if (isDataUploaded && dataToUse) {
+      const plantData = dataToUse.reduce((acc: any, row: any) => {
+        const plant = row['Plant/Unit'];
+        const manpower = Number(row['Manpower Count']) || 0;
+        
+        if (!acc[plant]) {
+          acc[plant] = 0;
+        }
+        acc[plant] += manpower;
+        return acc;
+      }, {});
+
+      const labels = Object.keys(plantData);
+      const data = Object.values(plantData) as number[];
       const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899', '#14b8a6'];
       
       return {
@@ -105,17 +214,22 @@ const ManpowerDashboard = () => {
   };
 
   const getGenderData = () => {
-    if (isDataUploaded && uploadedData?.genderData) {
-      const labels = uploadedData.genderData.map((item: any) => item.gender);
-      const data = uploadedData.genderData.map((item: any) => item.count);
-      const colors = ['#3b82f6', '#ec4899', '#6b7280'];
+    const dataToUse = filteredData || (isDataUploaded ? uploadedData?.rawData : null);
+    
+    if (isDataUploaded && dataToUse) {
+      const maleTotal = dataToUse.reduce((sum: number, row: any) => sum + (Number(row['Male Manpower']) || 0), 0);
+      const femaleTotal = dataToUse.reduce((sum: number, row: any) => sum + (Number(row['Female Manpower']) || 0), 0);
+      
+      const labels = ['Male', 'Female'];
+      const data = [maleTotal, femaleTotal];
+      const colors = ['#3b82f6', '#ec4899'];
       
       return {
         labels,
         datasets: [{
           data,
-          backgroundColor: colors.slice(0, labels.length),
-          borderColor: colors.slice(0, labels.length).map(color => color.replace('0.8', '1')),
+          backgroundColor: colors,
+          borderColor: colors.map(color => color.replace('0.8', '1')),
           borderWidth: 2
         }]
       };
@@ -243,6 +357,7 @@ const ManpowerDashboard = () => {
     }
 
     console.log('Generating report with filters:', filters);
+    console.log('Filtered data:', filteredData);
     toast({
       title: "Report Generated",
       description: "Charts have been updated based on selected filters.",
@@ -331,7 +446,7 @@ const ManpowerDashboard = () => {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{metrics.totalEmployees.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-blue-600">{filteredMetrics.totalEmployees.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Active workforce
               </p>
@@ -344,7 +459,7 @@ const ManpowerDashboard = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{metrics.executives.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-green-600">{filteredMetrics.executives.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Executive cadre
               </p>
@@ -357,7 +472,7 @@ const ManpowerDashboard = () => {
               <Building2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-purple-600">{metrics.departments}</div>
+              <div className="text-2xl font-bold text-purple-600">{filteredMetrics.departments}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Operating units
               </p>
@@ -370,7 +485,7 @@ const ManpowerDashboard = () => {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{metrics.avgAge}</div>
+              <div className="text-2xl font-bold text-orange-600">{filteredMetrics.avgAge}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Years old
               </p>
